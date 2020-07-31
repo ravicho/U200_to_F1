@@ -62,7 +62,12 @@ Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building k
 
     And that's all you need to modify in your application to port to F1. 
     
-    You can execute `make build` that will build the host, kernel, and finally create the xclbin. Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
+    You can execute the following command to build the host, kernel, and finally create the xclbin. 
+    ```
+    export PLATFORM_REPO_PATHS=/home/centos/src/project_data/aws-fpga/Vitis/aws_platform
+    make build
+    ```
+    Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
 
 4. Run the following script to generate `awsxclbin`
 

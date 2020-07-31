@@ -1,39 +1,77 @@
-# U200_to_F1
+# Porting Application from U200 to F1
 
-This lab demonstrates how to port an Vitis application developed for U200 card and steps on how to migrate this application to an F1 instance. 
+This article demonstrates how to port a Vitis application developed for U200 card and steps on how to migrate this application to an F1 instance. 
 
-In this lab, you will start with existing project that has been compiled for U200, review the compilation/linking script first. Next, you will review the required modifications for porting to F1 instance. Finally, you will generate the AFI that can be loaded on the F1 instane.
+In this lab, you will start with an existing project that has been build for U200, review the compilation/linking script first. Next, you will review the required modifications for porting to F1 instance. Finally, you will generate the AFI that can be loaded on the F1 instance.
 
 
 ## Overview of the Application 
 
-Vitis core development application consists of a software program running on a host CPU and interacting with one or more accelerators running on a Xilinx FPGA. In this lab, the accelerator has functionality of a simple vector addition. The project comprises of multiple files under src directory.
+Vitis core development application consists of a software program running on a host CPU and interacting with one or more accelerators running on a Xilinx FPGA. In this lab, the accelerator has the functionality of a simple vector addition. The project comprises of multiple files under src directory.
 - `vadd.cpp` contains the software implementation of the kernel which performs simple addition of 2 input values. 
-- `host.cpp` contains the main function running on host CPU. The host application is written in either C++ using OpenCL APIs calls to interact with the FPGA accelerator.
+- `host.cpp` contains the main function running on the host CPU. The host application is written in either C++ using OpenCL APIs calls to interact with the FPGA accelerator.
 There are separate directories for building the kernel for `u200 card` and `F1 instance`, u200 and f1 respectively. 
 
 ## Build U200 Kernel
-Change to directory `u200` for building kernel for F1 instance. 
-The software program is written in C/C++ and uses OpenCL™ API calls to communicate and control the accelerated kernels. Use the following command to compile the program using GCC/g++ compiler
 
-```g++ -D__USE_XOPEN2K8 -D__USE_XOPEN2K8 -I/$(XRT_PATH)/opt/xilinx/xrt/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$(XRT_PATH)/opt/xilinx/xrt/lib/ -lxilinxopencl -lpthread -lrt -o build_u200/host```
+1. Change to directory `u200` for building kernel for F1 instance. 
+2. The software program is written in C/C++ and uses OpenCL™ API calls to communicate and control the accelerated kernels. Use the following command to compile the program using GCC/g++ compiler
 
-The following `v++ compile` command creates .xo file using stanard v++ compile options to add profiling and location of directories for saving reports. Some of the key options to note here. 
-- `-plaform` sets the targetted plaform. For U200 card, its set to xilinx_u200_xdma_201830_2
+    ```g++ -D__USE_XOPEN2K8 -D__USE_XOPEN2K8 -I/$(XRT_PATH)/opt/xilinx/xrt/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$(XRT_PATH)/opt/xilinx/xrt/lib/ -lxilinxopencl -lpthread -lrt -o build_u200/host```
 
-```v++ -c -g -t hw -R 1 -k vadd --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src ../src/vadd.cpp -o ./vadd.hw_emu.xo```
+2. The following `v++ compile` command creates .xo file using standard v++ compile options to add profiling and location of directories for saving reports. 
+    
+    ```v++ -c -g -t hw -R 1 -k vadd --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src ../src/vadd.cpp -o ./vadd.hw.xo```
+    
+    - `-plaform` option sets the targetted plaform. For U200 card, its set to xilinx_u200_xdma_201830_2
 
-The following `v++ linker` command creates xclbin which can be loaded on the FPGA. 
+3. The following `v++ linker` command creates xclbin which can be loaded on the FPGA. 
 
-```v++ -l -g -t hw -R 1 --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir  --config ./connectivity.cfg -I../src vadd.hw_emu.xo -o add.hw_emu.xclbin```
+    ```v++ -l -g -t hw -R 1 --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir  --config ./connectivity.cfg -I../src vadd.hw.xo -o add.hw.xclbin```
 
--   Kernel arguments are connected to the same bank DDR1 and `-sp` option is used to enable this linking. This option is added in connectivity section of `connectivity.cfg` file as shown below.
+4. Kernel arguments are connected to the same bank DDR1 and `-sp` option is used to enable this linking. This option is added in connectivity section of `connectivity.cfg` file as shown below.
     ```[connectivity]
     sp=vadd_1.in1:DDR[1]
     sp=vadd_1.in2:DDR[1]
     sp=vadd_1.out:DDR[1]
     ```
-Above commands are encapsulated in Makefile targets. You can execute ```make build``` that will build the host, kernel and finally create the xclbin for u200. 
+    The above commands are encapsulated in Makefile targets. You can execute ```make build``` that will build the host, kernel and finally create the xclbin for u200. 
+
+5. You can confirm the above DDR connection in xclbin generated by executing the following command.
+   
+    ``` xclbinutil --info --input ./vadd.xclbin ```
+    
+    ```
+    Memory Configuration
+    --------------------
+    Name:         bank0
+    Index:        0
+    Type:         MEM_DDR4
+    Base Address: 0x4000000000
+    Address Size: 0x400000000
+    Bank Used:    No
+
+    Name:         bank1
+    Index:        1
+    Type:         MEM_DDR4
+    Base Address: 0x5000000000
+    Address Size: 0x400000000
+    Bank Used:    Yes
+
+    Name:         bank2
+    Index:        2
+    Type:         MEM_DDR4
+    Base Address: 0x6000000000
+    Address Size: 0x400000000
+    Bank Used:    No
+
+    Name:         bank3
+    Index:        3
+    Type:         MEM_DDR4
+    Base Address: 0x7000000000
+    Address Size: 0x400000000
+    Bank Used:    No
+    ```
     
 ## Build F1 kernel - Compilation and Linking script changes 
 Change to directory `f1` for building kernel for F1 instance. For this application to run on F1 instance, you will need to make the following changes only.
@@ -47,16 +85,56 @@ Change to directory `f1` for building kernel for F1 instance. For this applicati
     sp=vadd_1.out:DDR[0]
     ```
 
-You can execute ```make build``` that will build the host, kernel and finally create the xclbin. Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
+    You can execute ```make build``` that will build the host, kernel, and finally create the xclbin. Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
 
-3. Run the following script to generate `awsxclbin`
+3. Executing the following command to confirm that the kernel arguments are connected to DDR0. 
+   
+    ``` xclbinutil --info --input ./vadd.xclbin ```
 
-``` $VITIS_TOOLS/create_vitis_afi.sh -xclbin=./vadd.xclbin -o=./vadd -s3_bucket=<bucket-name> -s3_dcp_key=f1-dcp-folder -s3_logs_key=f1-logs ```
+    ```
+    Memory Configuration
+    --------------------
+   Name:         bank0
+   Index:        0
+   Type:         MEM_DDR4
+   Base Address: 0x800000000
+   Address Size: 0x400000000
+   Bank Used:    Yes
 
--   THe previous step will create *_afi_id.txt file. Open this file and record the `AFI Id`. Check the AFI creation status using AFI ID as shown below
-    `aws ec2 describe-fpga-images --fpga-image-ids <AFI ID>`
--   If the state is shown as 'available', it indicates AFI creation is completed.  
-    "Code": "available"
+   Name:         bank1
+   Index:        1
+   Type:         MEM_DDR4
+   Base Address: 0x0
+   Address Size: 0x400000000
+   Bank Used:    No
+
+   Name:         bank2
+   Index:        2
+   Type:         MEM_DDR4
+   Base Address: 0x400000000
+   Address Size: 0x400000000
+   Bank Used:    No
+
+   Name:         bank3
+   Index:        3
+   Type:         MEM_DDR4
+   Base Address: 0xc00000000
+   Address Size: 0x400000000
+   Bank Used:    No
+    ```
+
+43. Run the following script to generate `awsxclbin`
+
+    ``` source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh ```
+
+    ``` $VITIS_TOOLS/create_vitis_afi.sh -xclbin=./vadd.xclbin -o=./vadd -s3_bucket=<bucket-name> -s3_dcp_key=f1-dcp-folder -s3_logs_key=f1-logs ```
+
+    -   The previous step will create *_afi_id.txt file. Open this file and record the `AFI Id`. Check the AFI creation status using AFI ID as shown below
+
+        ```aws ec2 describe-fpga-images --fpga-image-ids <AFI ID>```
+        -   If the state is shown as 'available', it indicates AFI creation is completed.  
+
+            ``` "Code": "available" ```
 
 ## Run the Application on F1
 
@@ -69,4 +147,5 @@ You can execute ```make build``` that will build the host, kernel and finally cr
 
 ## Conclusion 
 
+Its fairly straight forward to port your U200 application to F1 instance. In this article, you observed that there are only couple of changes required to make the application compliant to F1. There is absolutely no change required in source code at all. 
 

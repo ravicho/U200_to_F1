@@ -1,5 +1,4 @@
 TARGET := hw
-PLATFORM := xilinx_u200_xdma_201830_2
 
 build: xclbin host
 
@@ -8,26 +7,25 @@ run: build
 
 vadd.xo: ../src/vadd.cpp
 	v++ -c -g -t $(TARGET) -R 1 -k vadd \
-		--platform $(PLATFORM) \
                 --profile_kernel data:all:all:all \
                 --profile_kernel stall:all:all:all \
 		--save-temps \
 		--temp_dir ./temp_dir \
 		--report_dir ./report_dir \
 		--log_dir ./log_dir \
+		--config ./options.cfg \
 		-I../src \
 		../src/vadd.cpp \
 		-o ./vadd.xo
 
 vadd.xclbin: vadd.xo
 	v++ -l -g -t $(TARGET) -R 1 \
-		--platform $(PLATFORM) \
                 --profile_kernel data:all:all:all \
                 --profile_kernel stall:all:all:all \
 		--temp_dir ./temp_dir \
 		--report_dir ./report_dir \
 		--log_dir ./log_dir \
-		--config ./connectivity.cfg \
+		--config ./options.cfg \
 		-I../src \
 		vadd.xo \
 		-o vadd.xclbin

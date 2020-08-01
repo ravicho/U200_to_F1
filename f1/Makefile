@@ -3,7 +3,7 @@ TARGET := hw
 build: xclbin host
 
 run: build
-	./host ./vadd.xclbin
+	./host ./vadd.awsxclbin
 
 vadd.xo: ../src/vadd.cpp
 	v++ -c -g -t $(TARGET) -R 1 -k vadd \

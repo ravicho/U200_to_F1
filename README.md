@@ -29,47 +29,50 @@ There are separate directories, `u200` and `f1` for building the kernel for `U20
 
 2. The following `v++ compile` command creates .xo file using standard v++ compile options to add profiling and location of directories for saving reports. 
     
-    ```v++ -c -g -t hw -R 1 -k vadd --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src ../src/vadd.cpp -o ./vadd.hw.xo```
-    
-    - `-plaform` option sets the targetted plaform. For U200 card, its set to xilinx_u200_xdma_201830_2
+    ```v++ -c -g -t hw -R 1 -k vadd --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir --config ./options.cfg  -I../src ../src/vadd.cpp -o ./vadd.hw.xo```
 
 3. The following `v++ linker` command creates xclbin which can be loaded on the FPGA. 
 
-    ```v++ -l -g -t hw -R 1 --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir  --config ./connectivity.cfg -I../src vadd.hw.xo -o add.hw.xclbin```
+    ```v++ -l -g -t hw -R 1 --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir  --config ./options.cfg -I../src vadd.hw.xo -o add.hw.xclbin```
 
-4. Kernel arguments are connected to the same bank DDR1 and `-sp` option is used to enable this linking. This option is added in connectivity section of `connectivity.cfg` file as shown below.
-    ```[connectivity]
+4. To target the application for a specific target, platform option can be added to `options.cfg`
+    - For U200 card, its set to xilinx_u200_xdma_201830_2
+5. Kernel arguments are connected to the same bank DDR[1] and `sp` option is used to enable this linking. This option is added in connectivity section of `options.cfg` file as shown below.
+
+    Contents of  `options.cfg`
+
+    ```
+    platform=xilinx_u200_xdma_201830_2
+    [connectivity]
     sp=vadd_1.in1:DDR[1]
     sp=vadd_1.in2:DDR[1]
     sp=vadd_1.out:DDR[1]
     ```
-    Refer to <a href="https://www.xilinx.com/html_docs/xilinx2020_1/vitis_doc/kme1569523964461.html"> Vitis Documentation </a>for more information on v++ related commands and options. These commands are encapsulated in Makefile targets. You can execute `make build` that will build the host, kernel and finally create the `vadd.xclbin` for u200. 
+Refer to <a href="https://www.xilinx.com/html_docs/xilinx2020_1/vitis_doc/kme1569523964461.html"> Vitis Documentation </a>for more information on v++ related commands and options. These commands are encapsulated in Makefile targets. You can execute `make build` that will build the host, kernel and finally create the `vadd.xclbin` for u200. 
     
 ## Build F1 kernel - Compilation and Linking script changes 
-Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building kernel for F1 instance. For this application to run on F1 instance, following changes are required. 
+Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building kernel for F1 instance. For this application to run on F1 instance, you will need to update the `DDR connectivity` and `platform` target as shown below. Both of these updates can be done in `options.cfg` file as shown below
 
-1. Modify the target platform to AWS platform by updatig v++ compile and linking scripts to the following 
-    
-    `-platform $(AWS_PLATFORM)`
-    Refer<a href="https://github.com/aws/aws-fpga/tree/master/Vitis/aws_platform"> here</a> for the latest platform available.
-
-2. Connect the kernel arguments connection to DDR[0] by updating `connectivity.cfg` as shown below
-    ```[connectivity]
+1.  Contents of `options.cfg`
+    ```
+    platform=xilinx_aws-vu9p-f1_shell-v04261818_201920_2
+    [connectivity]
     sp=vadd_1.in1:DDR[0]
     sp=vadd_1.in2:DDR[0]
     sp=vadd_1.out:DDR[0]
     ```
+    Refer<a href="https://github.com/aws/aws-fpga/tree/master/Vitis/aws_platform"> here</a> for the latest platform available.
 
     And that's all you need to modify in your application to port to F1. 
     
-    You can execute the following command to build the host, kernel, and finally create the xclbin. 
+2.  You can execute the following command to build the host, kernel, and finally create the xclbin. 
     ```
     export PLATFORM_REPO_PATHS=/home/centos/src/project_data/aws-fpga/Vitis/aws_platform
     make build
     ```
     Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
 
-4. Run the following script to generate `awsxclbin`
+3. Run the following script to generate `awsxclbin`
 
     ``` 
     cd /home/centos/src/project_data; 

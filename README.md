@@ -1,45 +1,49 @@
-# Porting Application from U200 to F1
+# Porting Applications from Alveo U200 to AWS F1 with Vitis
 
-This article demonstrates how to port a Vitis application developed for U200 card to an F1 instance. 
+This article explains how to port a Vitis application developed for an Alveo U200 card to an AWS EC2 F1 instance. 
 
-You will start with an existing project that has been build for U200, review the compilation/linking script. Next, you will modify the scripts for targetting application on on F1. Finally, you will generate the AFI that can be run on the F1 instance. 
+The Vitis development flow provides platform independent APIs and interfaces to the developer. This makes the process of migrating applications across similar FPGA acceleration cards is greatly facilitated. In this example, the source code for the software program and for the FPGA kernels remains unchanged. Only command line changes are necessary to port the application migrate from Alveo U200 to AWS F1.
 
-Run the following commands to clone the repository to your local workspace on F1 instance. 
-
-``` 
-mkdir /home/centos/src/project_data;
-cd /home/centos/src/project_data; 
-git clone https://github.com/ravicho/U200_to_F1
-```
+You will start with an existing project built for U200 and review the compilation script. Next, you will modify the script to target the same application on AWS F1. Finally, you will generate the Amazon FPGA Image (AFI) that can be loaded on the AWS F1 instance. 
 
 
 ## Overview of the Application 
 
-Vitis core development application consists of a software program running on a host CPU and interacting with one or more accelerators running on a Xilinx FPGA. In this lab, the accelerator has the functionality of a simple vector addition. The project comprises of multiple files under src directory.
-- `vadd.cpp` contains the software implementation of the kernel which performs simple addition of 2 input values. 
-- `host.cpp` contains the main function running on the host CPU. The host application is written in either C++ using OpenCL APIs calls to interact with the FPGA accelerator.
-There are separate directories, `u200` and `f1` for building the kernel for `U200 card` and `F1 instance` respectively. 
+A Vitis FPGA-accelerated application consists of a software program running on a host CPU which interacts with one or more accelerators running in a Xilinx FPGA device. 
 
-## Build U200 Kernel
+In this lab, the accelerator is a simple vector-add kernel. 
 
-1. Change to directory `/home/centos/src/project_data/U200_to_F1/u200`
-2. The software program is written in C/C++ and uses OpenCL™ API calls to communicate and control the accelerated kernels. Use the following command to compile the program using GCC/g++ compiler
+The `src` directory contains the source code for the project:
 
-    ```g++ -D__USE_XOPEN2K8 -D__USE_XOPEN2K8 -I/$(XRT_PATH)/opt/xilinx/xrt/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$(XRT_PATH)/opt/xilinx/xrt/lib/ -lxilinxopencl -lpthread -lrt -o build_u200/host```
+- `vadd.cpp` contains the C++ source code of the accelerator which adds 2 arbitrarily sized input vectors. 
+- `host.cpp` contains the main function running on the host CPU. The host application is written in C++ and uses OpenCL™ APIs to interact with the FPGA accelerator.
 
-2. The following `v++ compile` command creates .xo file using standard v++ compile options to add profiling and location of directories for saving reports. 
+The  `u200` and `f1` directories contain the Makefiles and scripts for building for Alveo U200 and AWS F1 respectively.
+
+## Building for Alveo U200
+
+1. Go to the `u200` directory 
+
+2. The host program is built with the following command:
+
+    ```
+    g++ -D__USE_XOPEN2K8 -I/$(XRT_PATH)/opt/xilinx/xrt/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$(XRT_PATH)/opt/xilinx/xrt/lib/ -lxilinxopencl -lpthread -lrt -o build_u200/host
+    ```
+
+    This command ensures that the program is linked with the Xilinx Runtime (XRT) libraries. XRT provides platform-independent APIs to interact with the FPGA, allowing the source code to remain the same for U200 and F1.
+
+3. The FPGA binary is built with the following commands:
+
+    ```
+    v++ -c -g -t hw -R 1 -k vadd --config ./options.cfg --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src ../src/vadd.cpp -o ./vadd.hw.xo
+    v++ -l -g -t hw -R 1 --config ./options.cfg --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src vadd.hw.xo -o add.hw.xclbin
+    ```
+
+    The Vitis v++ compiler is used to build the FPGA binary. The first command (`v++ -c`) compiles the source code for vector-add kernel (vadd.cpp) and generates the compiled kernel object (.xo). The second command (`v++ -l`) links the compiled kernel to the shell and produces FPGA binary (.xclbin file) which can then be loaded on the U200 acceleration card.
     
-    ```v++ -c -g -t hw -R 1 -k vadd --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir --config ./options.cfg  -I../src ../src/vadd.cpp -o ./vadd.hw.xo```
-
-3. The following `v++ linker` command creates xclbin which can be loaded on the FPGA. 
-
-    ```v++ -l -g -t hw -R 1 --platform xilinx_u200_xdma_201830_2 --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir  --config ./options.cfg -I../src vadd.hw.xo -o add.hw.xclbin```
-
-4. To target the application for a specific target, platform option can be added to `options.cfg`
-    - For U200 card, its set to xilinx_u200_xdma_201830_2
-5. Kernel arguments are connected to the same bank DDR[1] and `sp` option is used to enable this linking. This option is added in connectivity section of `options.cfg` file as shown below.
-
-    Contents of  `options.cfg`
+    For both commands, the `--config` option is used to pass the name of a file called `options.cfg` containing additional options specific to building for U200.
+    
+4. The `options.cfg` file contains the following options: 
 
     ```
     platform=xilinx_u200_xdma_201830_2
@@ -48,12 +52,26 @@ There are separate directories, `u200` and `f1` for building the kernel for `U20
     sp=vadd_1.in2:DDR[1]
     sp=vadd_1.out:DDR[1]
     ```
-Refer to <a href="https://www.xilinx.com/html_docs/xilinx2020_1/vitis_doc/kme1569523964461.html"> Vitis Documentation </a>for more information on v++ related commands and options. These commands are encapsulated in Makefile targets. You can execute `make build` that will build the host, kernel and finally create the `vadd.xclbin` for u200. 
-    
-## Build F1 kernel - Compilation and Linking script changes 
-Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building kernel for F1 instance. For this application to run on F1 instance, you will need to update the `DDR connectivity` and `platform` target as shown below. Both of these updates can be done in `options.cfg` file as shown below
 
-1.  Contents of `options.cfg`
+    The `platform` option specifies which acceleration platform is targeted for the build. Here we are using to the U200 shell.
+    
+    The `sp` options are used to specify the assignment of kernel arguments to DDR banks. In this case, we are mapping all three kernel arguments to DDR[1], which is the DDR interface located in the shell on Alveo U200.
+    
+    Putting all the platform-specific options in one file is not mandatory, but it is very convenient and facilitates the porting process as the main command line can then be reused without any changes for all platforms.
+     
+    Refer to the [Vitis Documentation](https://www.xilinx.com/html_docs/xilinx2020_1/vitis_doc/kme1569523964461.html) for more information on v++ related commands and options. 
+
+5. The Makefile provided in the directory can be used to build the project for U200. `make build` will build the host application, compile the kernel and finally create the `vadd.xclbin` for U200. 
+    
+    
+## Building for AWS F1
+
+In order to port the vector-add example from Alveo U200 to AWS F1, the only change required is in the `options.cfg` file. The source code remains unchanged and the g++ and v++ commands remain identical.
+
+1. Go to the `f1` directory 
+
+2.  The `options.cfg` file for AWS F1 contains the following options:
+
     ```
     platform=xilinx_aws-vu9p-f1_shell-v04261818_201920_2
     [connectivity]
@@ -61,18 +79,34 @@ Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building k
     sp=vadd_1.in2:DDR[0]
     sp=vadd_1.out:DDR[0]
     ```
-    Refer<a href="https://github.com/aws/aws-fpga/tree/master/Vitis/aws_platform"> here</a> for the latest platform available.
-
-    And that's all you need to modify in your application to port to F1. 
     
-2.  You can execute the following command to build the host, kernel, and finally create the xclbin. 
+    The `platform` option is set to use the AWS F1 shell. The string used corresponds to the name of the latest shell which can be found [here](https://github.com/aws/aws-fpga/tree/master/Vitis/aws_platform) on the aws-fpga repo.
+
+    The `sp` options are set to connect the kernel arguments to DDR[0], which is the DDR interface located in the AWS F1 shell. Keeping the same settings as the U200 would produce a working design on AWS F1. But in order to produce exactly the same configuration and target the DDR interface located in the AWS F1 shell, the sp options are modified to use DDR[0].
+    
+    These changes are the only ones needed to port this project from U200 to F1. 
+    
+3.  You can build the project for AWS F1 using the exact same commands that were used for U200:
+
     ```
     export PLATFORM_REPO_PATHS=/home/centos/src/project_data/aws-fpga/Vitis/aws_platform
-    make build
-    ```
-    Next, you will need to create `awsxclbin` that can be loaded on F1 instance.
+    
+    g++ -D__USE_XOPEN2K8 -I/$(XRT_PATH)/opt/xilinx/xrt/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$(XRT_PATH)/opt/xilinx/xrt/lib/ -lxilinxopencl -lpthread -lrt -o build_u200/host```
 
-3. Run the following script to generate `awsxclbin`
+    v++ -c -g -t hw -R 1 -k vadd --config ./options.cfg --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --save-temps --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src ../src/vadd.cpp -o ./vadd.hw.xo
+    v++ -l -g -t hw -R 1 --config ./options.cfg --profile_kernel data:all:all:all --profile_kernel stall:all:all:all --temp_dir ./temp_dir --report_dir ./report_dir --log_dir ./log_dir -I../src vadd.hw.xo -o add.hw.xclbin    
+    ```
+    
+    Alternatively, you can use the provided Makefile:
+    
+     ```
+    export PLATFORM_REPO_PATHS=/home/centos/src/project_data/aws-fpga/Vitis/aws_platform
+    make build
+    ```   
+    
+4. When targeting AWS F1, you need to go through the additional step of creating an Amazon FPGA Image (AFI). This is done with the `create_vitis_afi.sh` command provided by AWS. This command reads the FPGA binary generated by the v++ linker and also requires information about the user’s AWS S3 bucket. More information about this command is available on the [AWS documentation](https://github.com/aws/aws-fpga/blob/master/Vitis/README.md#2-create-an-amazon-fpga-image-afi).     
+    
+    Use the commands below to generate the `awsxclbin` file
 
     ``` 
     cd /home/centos/src/project_data; 
@@ -82,24 +116,32 @@ Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building k
     $AWS_FPGA_REPO_DIR/Vitis/tools/create_vitis_afi.sh -xclbin=./vadd.xclbin -o=./vadd -s3_bucket=<bucket-name> -s3_dcp_key=f1-dcp-folder -s3_logs_key=f1-logs 
     ```
 
-    -   The previous step will create *_afi_id.txt file. Open this file and record the `AFI Id`. Check the AFI creation status using AFI ID as shown below
+    NOTE: Make sure to use your S3 bucket information when running the `create_vitis_afi` command.
 
-        ```aws ec2 describe-fpga-images --fpga-image-ids <AFI ID>```
-        -   If the state is shown as 'available', it indicates AFI creation is completed.  
+    This command creates an *_afi_id.txt file. Open this file and record the `AFI Id`. Check the AFI creation status using AFI ID as shown below
 
-            ``` 
-            "State":  {
-                "Code": "available" 
-            },
-            ```
+    ```aws ec2 describe-fpga-images --fpga-image-ids <AFI ID>```
+    
+    If the state is shown as 'available', it indicates AFI creation is completed.  
 
-## Run the Application on F1
+    ``` 
+        "State":  {
+            "Code": "available" 
+        },
+    ```
+
+## Run the Application on AWS F1
 
 1. Execute the following command to source the Vitis runtime environment 
-```source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh```
+
+    ```source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh```
+
 2. Execute the host application with the .awsxclbin FPGA binary
-``` ./vadd vadd.awsxclbin ``` 
-3. Above command displays that the Hardware run is Passing as shown below.
+
+    ``` ./vadd vadd.awsxclbin ``` 
+    
+3. The messages below will indicate that the program ran successfully.
+
     ```
     Found Platform
     Platform Name: Xilinx
@@ -110,5 +152,4 @@ Change to directory `/home/centos/src/project_data/U200_to_F1/f1` for building k
 
 ## Conclusion 
 
-Its fairly straight forward to port your U200 application to F1 instance. In this article, you observed that there are only couple of scripting changes required to make the application compliant to F1 and absolutely no change required in source code at all. 
-
+In the Vitis flow, the user can develop source code which remains mostly agnostic of platform-specific platform details. This greatly facilitates the process of migrating applications across similar FPGA acceleration cards. In this example, the same source code could be ported from Alveo U200 to AWS F1 without any changes at all. Only a couple of changes to the v++ compilation options were required.

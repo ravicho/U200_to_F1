@@ -27,7 +27,7 @@ The  `u200` and `f1` directories contain the Makefiles and scripts for building 
 2. The host program is built with the following command:
 
     ```
-    g++ -D__USE_XOPEN2K8 -I/$XILINX_XRT/lib/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$XILINX_XRT/lib -lxilinxopencl -lpthread -lrt -o build_u200/host
+    g++ -D__USE_XOPEN2K8 -I/$XILINX_XRT/include/ -I./src -O3 -Wall -fmessage-length=0 -std=c++11 ../src/host.cpp -L/$XILINX_XRT/lib -lxilinxopencl -lpthread -lrt -o build_u200/host
     ```
 
     This command ensures that the program is linked with the Xilinx Runtime (XRT) libraries. XRT provides platform-independent APIs to interact with the FPGA, allowing the source code to remain the same for U200 and F1.
